@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Generador PDF</title>
+<!-- jsPDF (puede ser la versión que ya usabas) -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+<style>
+  /* opcional: estilos internos si quieres previsualizar algo */
+  body { font-family: 'Open Sans', sans-serif; font-size: 12px; color:#000; }
+</style>
+</head>
+<body>
+
+<script>
+// 1. Avisar a Wix "ya estoy listo"
+window.parent.postMessage({ type: 'ready' }, "*");
+
+// 2. Escuchar datos desde Wix
+window.addEventListener('message', async (event) => {
+  const data = event.data;
+  if (!data) return;
+
+  // ignorar mensajes tipo "ready" que tú mismo mandas
+  if (data.type === 'ready') return;
+
+  // sólo reaccionar a data válidos del diagnóstico
+  if (data.type === 'datosInforme') {
+    await generarPDFyDescargar(data);
+
+    // Avisar de éxito de generación a Wix
+    window.parent.postMessage({ type:'pdf-ok' }, '*');
+  }
+});
+
+async function generarPDFyDescargar(data){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({
+    unit: 'pt',   // puntos
+    format: 'letter' // o 'a4', según tu pdf original
+  });
+
+  // Margenes básicos
+  const M_LEFT = 40;
+  const M_TOP  = 40;
+  let y = M_TOP;
+
+  // ============ PORTADA / PÁGINA 1 ============
+
+  // Branding arriba derecha
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(8);
+  doc.text('Innovación Regenerativa | Informe diagnóstico', 400, y);
+  y += 20;
+
+  // Título
+  doc.setFontSize(16);
+  doc.setFont('helvetica','bold');
+  doc.text(
+    data.idioma === 'en'
+      ? 'ORGANIZATIONAL DIAGNOSTIC REPORT'
+      : 'INFORME DIAGNÓSTICO ORGANIZACIONAL',
+    M_LEFT,
+    y
+  );
+  y += 18;
+
+  // Subtítulo
+  doc.setFontSize(10);
+  doc.setFont('helvetica','normal');
+  y += 4;
+   doc.text(
+    splitLines(
+      doc,
+      data.idioma === 'en'
+        ? 'A starting point to align purpose, energy, and outcomes in your organization'
+        : 'Un punto de partida para alinear propósito, energía y resultados en tu organización',
+      520
+    ),
+    M_LEFT,
+    y
+  );
+  y += 28;
+
+  // Bloque de datos del usuario/empresa
+  const lineaUsuario1 =
+    (data.idioma === 'en'
+      ? `Name: ${data.nombre} ${data.apellido}  |  Organization: ${data.empresa}`
+      : `Nombre: ${data.nombre} ${data.apellido}  |  Empresa: ${data.empresa}`);
+
+  const lineaUsuario2 =
+    (data.idioma === 'en'
+      ? `Role: ${data.puesto}  |  Country: ${data.pais}`
+      : `Puesto: ${data.puesto}  |  País: ${data.pais}`);
+
+  const lineaUsuario3 =
+    (data.idioma === 'en'
+      ? `Date: ${data.fecha}`
+      : `Fecha: ${data.fecha}`);
+
+  doc.setFontSize(9);
+  doc.text(splitLines(doc, lineaUsuario1, 520), M_LEFT, y); y+=14;
+  doc.text(splitLines(doc, lineaUsuario2, 520), M_LEFT, y); y+=14;
+  doc.text(splitLines(doc, lineaUsuario3, 520), M_LEFT, y); y+=20;
+
+  // Frase inspiradora
+  doc.setFont('helvetica','italic');
+  doc.setFontSize(9);
+  const frase = (data.idioma === 'en')
+    ? 'We cannot impose regeneration; we can only create the conditions for it to emerge.'
+    : 'No podemos imponer la regeneración, solo podemos crear las condiciones para que emerja.';
+  doc.text(splitLines(doc, `"${frase}"`, 520), M_LEFT, y); 
+  y+=12;
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(8);
+  doc.text('Regenesis Group', M_LEFT, y);
+  y += 24;
+
+  // Bloque estado general
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(11);
+  doc.text(
+    data.idioma === 'en'
+      ? 'Organizational status'
+      : 'Nivel general organizacional',
+    M_LEFT, y
+  );
+  y+=14;
+
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(9);
+  doc.text(
+    [
+      (data.idioma==='en'
+        ? `Overall score: ${data.promedioGeneral} / 5`
+        : `Promedio general: ${data.promedioGeneral} / 5`
+      ),
+      (data.idioma==='en'
+        ? `General level: ${data.nivelGeneral}`
+        : `Nivel general: ${data.nivelGeneral}`
+      )
+    ],
+    M_LEFT,
+    y
+  );
+  y += 24;
+
+  // Insight / lectura humana
+  doc.setFontSize(9);
+  const insight = data.insightNivel || '';
+  const insightLines = splitLines(doc, insight, 520);
+  doc.text(insightLines, M_LEFT, y);
+  y += insightLines.length * 12 + 10;
+
+  // Caja de recomendación clave (simulamos fondo gris claro)
+  const cajaText = (
+    data.idioma === 'en'
+    ? 'Key recommendation: Focus leadership attention on the 2–3 lowest scoring areas and link fixes to strategic purpose. Disconnection is expensive – and reversible.'
+    : 'Recomendación clave: Poner en agenda de liderazgo las 2–3 áreas con menor puntaje y vincular su mejora al propósito estratégico. La desconexión es costosa, pero reversible.'
+  );
+  // dibujar rectángulo gris claro
+  doc.setFillColor(245,245,245);
+  const cajaLines = splitLines(doc, cajaText, 500);
+  const cajaH = cajaLines.length * 12 + 16;
+  doc.rect(M_LEFT-4, y, 520, cajaH, 'F'); // relleno
+  doc.setFont('helvetica','bold');
+  doc.setTextColor(0,0,0);
+  doc.text(cajaLines, M_LEFT, y+14);
+  y += cajaH + 20;
+
+  // Tabla resumen por dimensión
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(11);
+  doc.text(
+    data.idioma==='en'
+      ? 'Results by dimension'
+      : 'Resultados por dimensión',
+    M_LEFT,
+    y
+  );
+  y += 14;
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica','bold');
+  doc.text(
+    [
+      data.idioma==='en' ? 'Dimension'              : 'Dimensión',
+      data.idioma==='en' ? 'Avg'                    : 'Promedio',
+      data.idioma==='en' ? 'Hidden cost (USD/yr)'   : 'Costo oculto estimado'
+    ],
+    M_LEFT,
+    y
+  );
+  y += 10;
+
+
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(8);
+
+   // Mapeo de claves internas → etiqueta bonita
+  const nombresEs = {
+    proposito:'Propósito y estrategia',
+    liderazgo:'Liderazgo y gobernanza',
+    cultura:'Cultura y bienestar',
+    aprendizaje:'Aprendizaje e innovación',
+    procesos:'Procesos y tecnología',
+    sostenibilidad:'Sostenibilidad e impacto'
+  };
+  const nombresEn = {
+    proposito:'Purpose & Strategy',
+    liderazgo:'Leadership & Governance',
+    cultura:'Culture & Wellbeing',
+    aprendizaje:'Learning & Innovation',
+    procesos:'Processes & Technology',
+    sostenibilidad:'Sustainability & Impact'
+  };
+
+  // Filas
+  (data.areasDetalle || []).forEach((areaObj) => {
+    const labelBonito = (data.idioma==='en'
+      ? nombresEn[areaObj.areaKey]
+      : nombresEs[areaObj.areaKey]) || areaObj.areaKey;
+
+    const promTxt  = `${areaObj.promedio} / 5`;
+    const costoTxt = areaObj.costoUSD || '';
+
+    const rowLines = splitLines(
+      doc,
+      `${labelBonito}    ${promTxt}    ${costoTxt}`,
+      520
+    );
+    doc.text(rowLines, M_LEFT, y);
+    y += rowLines.length * 12;
+  });
+
+  y += 16;
+
+
+
+  // Gasto total
+  const totalLinea = (
+    data.idioma==='en'
+    ? `Estimated hidden cost: ${data.costoTotalUSD} per year.`
+    : `Costo oculto estimado: ${data.costoTotalUSD} al año.`
+  );
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(9);
+  doc.text(splitLines(doc,totalLinea,520), M_LEFT, y);
+  y+=24;
+
+  // Footer de página
+  doc.setFontSize(8);
+  doc.setFont('helvetica','normal');
+  doc.text(
+    data.idioma==='en' ? 'Page 1' : 'Página 1',
+    520,
+    760
+  );
+
+  // ============ PÁGINA 2: Retos / Fortalezas / Acciones clave ============
+  doc.addPage();
+  y = M_TOP;
+
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(12);
+  doc.text(
+    data.idioma==='en'
+      ? 'Priority tensions and opportunities'
+      : 'Tensiones prioritarias y oportunidades',
+    M_LEFT, y
+  );
+  y+=20;
+
+  // El campo analisisNivel es la narrativa larga que tú armaste (parts.htmlFull),
+  // que incluye retos prioritarios, fortalezas, % de costo, recomendación.
+  // Lo vamos a volcar aquí como texto multilinea:
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(9);
+  const analisisLines = splitLines(doc, limpiarHTML(data.analisisNivel), 520);
+  // Vamos dibujando línea por línea y saltando de página si se llena
+  for (let i=0; i<analisisLines.length; i++){
+    if (y > 760){
+      doc.addPage();
+      y = M_TOP;
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(9);
+    }
+    doc.text(analisisLines[i], M_LEFT, y);
+    y+=12;
+  }
+
+  // descarga
+  const fileName = generarNombreArchivo(data);
+  doc.save(fileName);
+}
+
+// Helpers para formatear texto:
+function splitLines(doc, text, maxWidth){
+  if (!text) return [''];
+  // jsPDF 2.5: splitTextToSize
+  return doc.splitTextToSize(String(text), maxWidth);
+}
+
+function limpiarHTML(htmlString){
+  if (!htmlString) return '';
+  // quita etiquetas básicas <p>, <strong>, etc.
+  return String(htmlString)
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// Genera nombre de archivo final
+function generarNombreArchivo(data){
+  const nom   = (data.nombre  || '').trim().replace(/\s+/g,'_');
+  const emp   = (data.empresa || '').trim().replace(/\s+/g,'_');
+  const fecha = (data.fecha   || '').replace(/[^\d-]/g,'_');
+  return `Diagnostico_${nom}_${emp}_${fecha}.pdf`;
+}
+</script>
+</body>
+</html>
