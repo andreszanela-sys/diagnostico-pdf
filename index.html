@@ -14,6 +14,133 @@
 <body>
 
 <script>
+
+// ====== Helpers de formato / espaciado ======
+const LHF = 1.35;                       // line-height factor global
+const P_SP = 8;                         // espacio entre párrafos (pt)
+
+
+function drawLabelValue(doc, label, value, x, y, wLabel=110, size=9) {
+  doc.setFont("helvetica", "bold");  doc.setFontSize(size);
+  doc.text(label, x, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(value, x + wLabel, y);
+  return y + size * LHF;
+}
+
+function fmtAvg(v){ return (v!=null && !isNaN(v)) ? `${Number(v).toFixed(1)} / 5` : "-"; }
+function fmtROI(v){
+  if (v===null || v===undefined || v==="") return "-";
+  const num = Number(v);
+  if (Number.isNaN(num)) return String(v);
+  return `${(num*100).toFixed(0)}%`;
+}
+
+// ====== Tabla Resultados por dimensión (4 columnas) ======
+// ================= TABLA CON ROI =================
+function drawResultsTable(doc, {lang, x, y, w}, rows){
+  // Columnas: Dimensión | Promedio | Costo oculto | ROI
+  const colW = [ w*0.46, w*0.12, w*0.22, w*0.20 ];
+  const HROW = 18;
+  const y0   = y;
+
+  // Encabezado
+  doc.setFillColor(240,240,240);
+  doc.rect(x, y, w, HROW, 'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(9);
+
+  const H = (t)=> (lang==='en'?t.en:t.es);
+  const HEADS = [
+    H({es:'Dimensión', en:'Dimension'}),
+    H({es:'Promedio',  en:'Avg'}),
+    H({es:'Costo oculto', en:'Hidden cost'}),
+    H({es:'ROI (potencial)', en:'ROI (potential)'})
+  ];
+
+  let cx = x + 6, cy = y + 12;
+  HEADS.forEach((h, i)=>{ doc.text(String(h), cx, cy); cx += colW[i]; });
+  y += HROW;
+
+  // Filas
+  doc.setFont('helvetica','normal');
+  rows.forEach(r=>{
+    // líneas divisorias
+    doc.setDrawColor(230); doc.line(x, y, x+w, y);
+
+    let tx = x + 6, ty = y + 12;
+
+    // Col 1: Dimensión (wrap)
+    const nameLines = doc.splitTextToSize(r.name, colW[0]-12);
+    doc.text(nameLines, tx, ty);
+    const h1 = Math.max(HROW, nameLines.length*12+6);
+
+    // Col 2: Promedio
+    tx = x + colW[0] + 6;
+    doc.text(`${r.avg} / 5`, tx, ty);
+
+    // Col 3: Costo
+    tx += colW[1];
+    doc.text(r.costStr, tx, ty);
+
+    // Col 4: ROI
+    tx += colW[2];
+    doc.text(r.roiStr, tx, ty);
+
+    y += Math.max(h1, HROW);
+  });
+
+  // marco sutil
+  doc.setDrawColor(200); doc.rect(x, y0, w, y - y0);
+  return y + 10;
+}
+
+
+// === CONFIG ROI (idéntico a Velo) ===
+const CONFIG_ROI = {
+  recRates: { crisis: 0.70, desconectado: 0.60, transicion: 0.45, regenerativa: 0.30 },
+  roiMultipleMin: 5,           // "≥5x"
+  horizonte: '12–18 meses',
+  currency: 'USD'
+};
+
+// === Traducción de puntaje → etiqueta de nivel (igual que en Velo) ===
+function nivelConexionTexto(p, l) {
+  if (p <= 2.0) return l==='en' ? 'In crisis'     : 'En crisis';
+  if (p <= 3.0) return l==='en' ? 'Disconnected'  : 'Desconectado';
+  if (p <= 4.0) return l==='en' ? 'In transition' : 'En transición';
+  return               l==='en' ? 'Regenerative'  : 'Regenerativa';
+}
+
+// === Ratio recuperable desde score (misma lógica que recRateFromScore de Velo) ===
+function recRateFromScore(score){
+  if (score <= 2.0) return CONFIG_ROI.recRates.crisis;
+  if (score <= 3.0) return CONFIG_ROI.recRates.desconectado;
+  if (score <= 4.0) return CONFIG_ROI.recRates.transicion;
+  return              CONFIG_ROI.recRates.regenerativa;
+}
+
+// === Helpers de formato/parseo seguros ===
+function moneyToNumber(s){
+  // "$16,800 USD" -> 16800
+  if (s == null) return 0;
+  const n = String(s).replace(/[^\d.,-]/g,'').replace(/,/g,'');
+  return Number(n || 0);
+}
+function fmtMoney(n, lang){
+  try { return '$' + Math.round(+n||0).toLocaleString(lang==='en'?'en-US':'es-MX') + ' ' + CONFIG_ROI.currency; }
+  catch{ return '$' + Math.round(+n||0) + ' ' + CONFIG_ROI.currency; }
+}
+
+// === Párrafos con buen interlineado/espaciado ===
+function drawParagraph(doc, text, x, y, maxW, font='helvetica', style='normal', size=9, lineH=12, spaceAfter=6){
+  doc.setFont(font, style); doc.setFontSize(size);
+  const lines = doc.splitTextToSize(String(text||''), maxW);
+  doc.text(lines, x, y);
+  return y + lines.length*lineH + spaceAfter;
+}
+
+
+
 // 1. Avisar a Wix "ya estoy listo"
 window.parent.postMessage({ type: 'ready' }, "*");
 
@@ -100,9 +227,9 @@ async function generarPDFyDescargar(data){
       : `Fecha: ${data.fecha}`);
 
   doc.setFontSize(9);
-  doc.text(splitLines(doc, lineaUsuario1, 520), M_LEFT, y); y+=14;
-  doc.text(splitLines(doc, lineaUsuario2, 520), M_LEFT, y); y+=14;
-  doc.text(splitLines(doc, lineaUsuario3, 520), M_LEFT, y); y+=20;
+  y = drawParagraph(doc, lineaUsuario1, M_LEFT, y, 520, "helvetica", "normal", 9);
+  y = drawParagraph(doc, lineaUsuario2, M_LEFT, y, 520, "helvetica", "normal", 9);
+  y = drawParagraph(doc, lineaUsuario3, M_LEFT, y, 520, "helvetica", "normal", 9);
 
   // Frase inspiradora
   doc.setFont('helvetica','italic');
@@ -110,11 +237,11 @@ async function generarPDFyDescargar(data){
   const frase = (data.idioma === 'en')
     ? 'We cannot impose regeneration; we can only create the conditions for it to emerge.'
     : 'No podemos imponer la regeneración, solo podemos crear las condiciones para que emerja.';
-  doc.text(splitLines(doc, `"${frase}"`, 520), M_LEFT, y); 
+  y = drawParagraph(doc, `"${frase}"`, M_LEFT, y, 520, "helvetica", "italic", 9);
   y+=12;
   doc.setFont('helvetica','normal');
   doc.setFontSize(8);
-  doc.text('Regenesis Group', M_LEFT, y);
+  y = drawParagraph(doc, "Regenesis Group", M_LEFT, y, 520, "helvetica", "normal", 8);
   y += 24;
 
   // Bloque estado general
@@ -181,82 +308,67 @@ async function generarPDFyDescargar(data){
   );
   y += 14;
 
-  doc.setFontSize(8);
-  doc.setFont('helvetica','bold');
-  doc.text(
-    [
-      data.idioma==='en' ? 'Dimension'              : 'Dimensión',
-      data.idioma==='en' ? 'Avg'                    : 'Promedio',
-      data.idioma==='en' ? 'Hidden cost (USD/yr)'   : 'Costo oculto estimado'
-    ],
-    M_LEFT,
-    y
-  );
-  y += 10;
-
-
-  doc.setFont('helvetica','normal');
-  doc.setFontSize(8);
-
-   // Mapeo de claves internas → etiqueta bonita
-  const nombresEs = {
+  // ===== Construcción de filas para la tabla (usa data.areasDetalle ya enviado desde Velo) =====
+    const NOMBRES_ES = {
     proposito:'Propósito y estrategia',
     liderazgo:'Liderazgo y gobernanza',
     cultura:'Cultura y bienestar',
     aprendizaje:'Aprendizaje e innovación',
     procesos:'Procesos y tecnología',
     sostenibilidad:'Sostenibilidad e impacto'
-  };
-  const nombresEn = {
+    };
+    const NOMBRES_EN = {
     proposito:'Purpose & Strategy',
     liderazgo:'Leadership & Governance',
     cultura:'Culture & Wellbeing',
     aprendizaje:'Learning & Innovation',
     procesos:'Processes & Technology',
     sostenibilidad:'Sustainability & Impact'
-  };
+    };
 
-  // Filas
-  (data.areasDetalle || []).forEach((areaObj) => {
-    const labelBonito = (data.idioma==='en'
-      ? nombresEn[areaObj.areaKey]
-      : nombresEs[areaObj.areaKey]) || areaObj.areaKey;
+    const lang = data.idioma === 'en' ? 'en' : 'es';
 
-    const promTxt  = `${areaObj.promedio} / 5`;
-    const costoTxt = areaObj.costoUSD || '';
+    // Normalizamos filas con ROI
+    const rows = (data.areasDetalle || []).map(a => {
+    const label = (lang==='en' ? NOMBRES_EN[a.areaKey] : NOMBRES_ES[a.areaKey]) || a.areaKey;
+    const avg   = Number(a.promedio || 0);
+    const costN = moneyToNumber(a.costoUSD);             // número
+    const rate  = recRateFromScore(avg);                 // 0.70 / 0.60 / 0.45 / 0.30
+    const rec   = Math.round(costN * rate);              // recuperable potencial
+    const inv   = Math.max(1, Math.round(rec / (CONFIG_ROI.roiMultipleMin||5))); // inversión estimada p/≥5x
+    const roiX  = (rec>0 && inv>0) ? (rec/inv) : CONFIG_ROI.roiMultipleMin;
 
-    const rowLines = splitLines(
-      doc,
-      `${labelBonito}    ${promTxt}    ${costoTxt}`,
-      520
+    return {
+        name: label,
+        avg: avg.toFixed(1),
+        costStr: fmtMoney(costN, lang),                // "$16,800 USD"
+        roiStr: `${fmtMoney(rec, lang)} · ≥${CONFIG_ROI.roiMultipleMin}x`
+        // si prefieres explicitar inversión: `${fmtMoney(rec, lang)} (inv. ~${fmtMoney(inv, lang)} → ≥${CONFIG_ROI.roiMultipleMin}x)`
+    };
+    });
+
+    // Dibujar tabla
+    y = drawResultsTable(doc, { lang, x: M_LEFT, y, w: 520 }, rows);
+
+    // Línea “Costo oculto estimado” (abajo de la tabla)
+    const totalLinea = (
+    lang==='en'
+        ? `Estimated hidden cost: ${data.costoTotalUSD} per year.`
+        : `Costo oculto estimado: ${data.costoTotalUSD} al año.`
     );
-    doc.text(rowLines, M_LEFT, y);
-    y += rowLines.length * 12;
-  });
+    doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    y = drawParagraph(doc, totalLinea, M_LEFT, y, 520, 'helvetica', 'bold', 10, 12, 8);
 
-  y += 16;
-
-
-
-  // Gasto total
-  const totalLinea = (
-    data.idioma==='en'
-    ? `Estimated hidden cost: ${data.costoTotalUSD} per year.`
-    : `Costo oculto estimado: ${data.costoTotalUSD} al año.`
-  );
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(9);
-  doc.text(splitLines(doc,totalLinea,520), M_LEFT, y);
-  y+=24;
 
   // Footer de página
-  doc.setFontSize(8);
-  doc.setFont('helvetica','normal');
-  doc.text(
+  const pageH = doc.internal.pageSize.getHeight();  // obtiene la altura total del PDF
+    doc.setFontSize(8);
+    doc.setFont('helvetica','normal');
+    doc.text(
     data.idioma==='en' ? 'Page 1' : 'Página 1',
-    520,
-    760
-  );
+    520,           // posición X (derecha)
+    pageH - 32     // posición Y (32pt desde el borde inferior)
+    );
 
   // ============ PÁGINA 2: Retos / Fortalezas / Acciones clave ============
   doc.addPage();
