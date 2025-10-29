@@ -39,7 +39,7 @@ function fmtROI(v){
 // ====== Tabla Resultados por dimensión (4 columnas) ======
 // ================= TABLA CON ROI =================
 function drawResultsTable(doc, {lang, x, y, w}, rows){
-  // Columnas: Dimensión | Promedio | Costo oculto | ROI
+  // Dimensión | Promedio | Costo oculto | ROI
   const colW = [ w*0.46, w*0.14, w*0.22, w*0.18 ];
   const HROW = 18;
   const y0   = y;
@@ -48,7 +48,6 @@ function drawResultsTable(doc, {lang, x, y, w}, rows){
   doc.setFillColor(240,240,240);
   doc.rect(x, y, w, HROW, 'F');
   doc.setFont('helvetica','bold'); doc.setFontSize(9);
-
   const H = (t)=> (lang==='en'?t.en:t.es);
   const HEADS = [
     H({es:'Dimensión', en:'Dimension'}),
@@ -64,35 +63,33 @@ function drawResultsTable(doc, {lang, x, y, w}, rows){
   // Filas
   doc.setFont('helvetica','normal');
   rows.forEach(r=>{
-    // líneas divisorias
     doc.setDrawColor(230); doc.line(x, y, x+w, y);
+    let tx = x + 6, ty = y + 12;
 
-    let tx = x + 4, ty = y + 11;
-
-    // Col 1: Dimensión (wrap)
+    // 1) Dimensión (wrap)
     const nameLines = doc.splitTextToSize(r.name, colW[0]-12);
     doc.text(nameLines, tx, ty);
     const h1 = Math.max(HROW, nameLines.length*12+6);
 
-    // Col 2: Promedio
+    // 2) Promedio (alineado izq simple)
     tx = x + colW[0] + 6;
     doc.text(`${r.avg} / 5`, tx, ty);
 
-    // Col 3: Costo
-    tx += colW[1];
-    doc.text(r.costStr, tx, ty);
+    // 3) Costo (alineado a la derecha)
+    const costX = x + colW[0] + colW[1] + colW[2] - 6;
+    doc.text(r.costStr, costX, ty, { align: 'right' });
 
-    // Col 4: ROI
-    tx += colW[2];
-    doc.text(r.roiStr, tx, ty);
+    // 4) ROI (ASCII: ">=5x", alineado derecha)
+    const roiX = x + w - 6;
+    doc.text(r.roiStr, roiX, ty, { align: 'right' });
 
     y += Math.max(h1, HROW);
   });
 
-  // marco sutil
   doc.setDrawColor(200); doc.rect(x, y0, w, y - y0);
   return y + 10;
 }
+
 
 
 // === CONFIG ROI (idéntico a Velo) ===
@@ -132,13 +129,13 @@ function fmtMoney(n, lang){
 }
 
 // === Párrafos con buen interlineado/espaciado ===
-function drawParagraph(doc, text, x, y, maxW, font='helvetica', style='normal', size=10.5, lineH=14, spaceAfter=10)
-{
+function drawParagraph(doc, text, x, y, maxW, font='helvetica', style='normal', size=11, lineH=16, spaceAfter=12){
   doc.setFont(font, style); doc.setFontSize(size);
   const lines = doc.splitTextToSize(String(text||''), maxW);
   doc.text(lines, x, y);
   return y + lines.length*lineH + spaceAfter;
 }
+
 
 
 
@@ -258,7 +255,7 @@ async function generarPDFyDescargar(data){
 
   doc.setFont('helvetica','normal');
   doc.setFontSize(9);
-  doc.text(
+  y = drawParagraph(
     [
       (data.idioma==='en'
         ? `Overall score: ${data.promedioGeneral} / 5`
@@ -282,20 +279,42 @@ async function generarPDFyDescargar(data){
   y += insightLines.length * 12 + 10;
 
   // Caja de recomendación clave (simulamos fondo gris claro)
-  const cajaText = (
-    data.idioma === 'en'
-    ? 'Key recommendation: Focus leadership attention on the 2–3 lowest scoring areas and link fixes to strategic purpose. Disconnection is expensive – and reversible.'
-    : 'Recomendación clave: Poner en agenda de liderazgo las 2–3 áreas con menor puntaje y vincular su mejora al propósito estratégico. La desconexión es costosa, pero reversible.'
-  );
-  // dibujar rectángulo gris claro
-  doc.setFillColor(245,245,245);
-  const cajaLines = splitLines(doc, cajaText, 500);
-  const cajaH = cajaLines.length * 12 + 16;
-  doc.rect(M_LEFT-4, y, 520, cajaH, 'F'); // relleno
-  doc.setFont('helvetica','bold');
-  doc.setTextColor(0,0,0);
-  doc.text(cajaLines, M_LEFT, y+14);
-  y += cajaH + 20;
+  // Caja de métricas clave (fondo gris)
+    const cajaTitulo = (data.idioma==='en' ? 'Snapshot' : 'Resumen');
+    const cajaLine1  = (data.idioma==='en'
+    ? `Overall score: ${data.promedioGeneral} / 5`
+    : `Promedio general: ${data.promedioGeneral} / 5`);
+    const cajaLine2  = (data.idioma==='en'
+    ? `General level: ${data.nivelGeneral}`
+    : `Nivel general: ${data.nivelGeneral}`);
+    const cajaLine3  = (data.idioma==='en'
+    ? `Estimated hidden cost: ${data.costoTotalUSD} per year`
+    : `Costo oculto estimado: ${data.costoTotalUSD} al año`);
+
+    doc.setFillColor(245,245,245);
+    const boxW = 520;
+    const boxX = M_LEFT-4;
+    const linesBox = [cajaTitulo, cajaLine1, cajaLine2, cajaLine3];
+
+    doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    const t1 = doc.splitTextToSize(linesBox[0], boxW-16);
+    let boxH = t1.length*16 + 8;
+
+    doc.setFont('helvetica','normal'); doc.setFontSize(11);
+    const t2 = doc.splitTextToSize(linesBox[1]+'\n'+linesBox[2]+'\n'+linesBox[3], boxW-16);
+    boxH += t2.length*16 + 16;
+
+    doc.rect(boxX, y, boxW, boxH, 'F');
+    let by = y + 14;
+
+    doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.text(t1, M_LEFT, by); by += t1.length*16 + 4;
+
+    doc.setFont('helvetica','normal'); doc.setFontSize(11);
+    doc.text(t2, M_LEFT, by);
+
+    y += boxH + 20;
+
 
   // Tabla resumen por dimensión
   doc.setFont('helvetica','bold');
@@ -343,7 +362,7 @@ async function generarPDFyDescargar(data){
         name: label,
         avg: avg.toFixed(1),
         costStr: fmtMoney(costN, lang),                // "$16,800 USD"
-        roiStr: `${fmtMoney(rec, lang)}  ≥${CONFIG_ROI.roiMultipleMin}x`
+        roiStr: `${fmtMoney(rec, lang)}  >=${CONFIG_ROI.roiMultipleMin}x`
         // si prefieres explicitar inversión: `${fmtMoney(rec, lang)} (inv. ~${fmtMoney(inv, lang)} → ≥${CONFIG_ROI.roiMultipleMin}x)`
     };
     });
