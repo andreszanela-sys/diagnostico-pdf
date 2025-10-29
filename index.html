@@ -247,17 +247,6 @@ function fmtROI(v){
 
 
 
-// === Párrafos con buen interlineado/espaciado ===
-function drawParagraph(doc, text, x, y, maxW, font='helvetica', style='normal', size=11, lineH=16, spaceAfter=12){
-  doc.setFont(font, style); doc.setFontSize(size);
-  const lines = doc.splitTextToSize(String(text||''), maxW);
-  doc.text(lines, x, y);
-  return y + lines.length*lineH + spaceAfter;
-}
-
-
-
-
 // 1. Avisar a Wix "ya estoy listo"
 window.parent.postMessage({ type: 'ready' }, "*");
 
@@ -279,14 +268,28 @@ window.addEventListener('message', async (event) => {
 });
 
 async function generarPDFyDescargar(data){
-  const jspdfNS = await waitForJsPDF(); 
+
+    await waitForJsPDF(); // solo espera a que cargue
+   const DocCtor = window.jspdf.jsPDF;     // toma el constructor UMD directo
+   const doc = new DocCtor({ unit: 'pt', format: 'letter' });
+
+  // sanity check (déjalo por ahora)
+   console.log('jsPDF?', { 
+     hasSetFont: typeof doc.setFont, 
+     hasText: typeof doc.text, 
+    ctor: DocCtor && DocCtor.name 
+  });
+   if (typeof doc.setFont !== 'function') {
+     throw new Error('Instancia jsPDF inválida (setFont ausente)');
+}
+  /*const jspdfNS = await waitForJsPDF(); 
   const { jsPDF } = jspdfNS; 
     //const jsPDF = await waitForJsPDF();
   //const { jsPDF } = window.jspdf;
   const doc = new jsPDF({
     unit: 'pt',   // puntos
     format: 'letter' // o 'a4', según tu pdf original
-  });
+  });*/
 
   // Margenes básicos
   const M_LEFT = 40;
@@ -570,7 +573,15 @@ async function generarPDFyDescargar(data){
 
   // descarga
   const fileName = generarNombreArchivo(data);
+try {
+  const blobUrl = doc.output('bloburl');
+  const a = document.createElement('a');
+  a.href = blobUrl; a.download = fileName;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(blobUrl); a.remove(); }, 800);
+} catch {
   doc.save(fileName);
+}
 }
 
 
