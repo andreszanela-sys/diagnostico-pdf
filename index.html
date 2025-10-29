@@ -40,7 +40,7 @@ function fmtROI(v){
 // ================= TABLA CON ROI =================
 function drawResultsTable(doc, {lang, x, y, w}, rows){
   // Columnas: Dimensión | Promedio | Costo oculto | ROI
-  const colW = [ w*0.46, w*0.12, w*0.22, w*0.20 ];
+  const colW = [ w*0.46, w*0.14, w*0.22, w*0.18 ];
   const HROW = 18;
   const y0   = y;
 
@@ -67,7 +67,7 @@ function drawResultsTable(doc, {lang, x, y, w}, rows){
     // líneas divisorias
     doc.setDrawColor(230); doc.line(x, y, x+w, y);
 
-    let tx = x + 6, ty = y + 12;
+    let tx = x + 4, ty = y + 11;
 
     // Col 1: Dimensión (wrap)
     const nameLines = doc.splitTextToSize(r.name, colW[0]-12);
@@ -132,7 +132,8 @@ function fmtMoney(n, lang){
 }
 
 // === Párrafos con buen interlineado/espaciado ===
-function drawParagraph(doc, text, x, y, maxW, font='helvetica', style='normal', size=9, lineH=12, spaceAfter=6){
+function drawParagraph(doc, text, x, y, maxW, font='helvetica', style='normal', size=10.5, lineH=14, spaceAfter=10)
+{
   doc.setFont(font, style); doc.setFontSize(size);
   const lines = doc.splitTextToSize(String(text||''), maxW);
   doc.text(lines, x, y);
@@ -342,7 +343,7 @@ async function generarPDFyDescargar(data){
         name: label,
         avg: avg.toFixed(1),
         costStr: fmtMoney(costN, lang),                // "$16,800 USD"
-        roiStr: `${fmtMoney(rec, lang)} · ≥${CONFIG_ROI.roiMultipleMin}x`
+        roiStr: `${fmtMoney(rec, lang)}  ≥${CONFIG_ROI.roiMultipleMin}x`
         // si prefieres explicitar inversión: `${fmtMoney(rec, lang)} (inv. ~${fmtMoney(inv, lang)} → ≥${CONFIG_ROI.roiMultipleMin}x)`
     };
     });
