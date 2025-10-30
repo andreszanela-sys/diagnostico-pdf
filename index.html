@@ -581,18 +581,11 @@ if (!ok) throw new Error('Instancia inválida de jsPDF: faltan métodos base');
 
   // descarga
   const fileName = generarNombreArchivo(data);
-try {
-  const blobUrl = doc.output('bloburl');
-  const a = document.createElement('a');
-  a.href = blobUrl; a.download = fileName;
-  document.body.appendChild(a); a.click();
-  setTimeout(()=>{ URL.revokeObjectURL(blobUrl); a.remove(); }, 800);
-} catch {
-  doc.save(fileName);
-}
-}
 
-
+// Opción A: data URL (más simple y suficiente)
+const dataUrl = doc.output('datauristring'); // "data:application/pdf;base64,..."
+window.parent.postMessage({ type: 'pdf-dataurl', fileName, dataUrl }, '*');
+}
 
 </script>
 </body>
