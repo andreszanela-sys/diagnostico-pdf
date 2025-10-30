@@ -247,8 +247,7 @@ function fmtROI(v){
 
 
 
-// 1. Avisar a Wix "ya estoy listo"
-window.parent.postMessage({ type: 'ready' }, "*");
+
 
 // 2. Escuchar datos desde Wix
 window.addEventListener('message', async (event) => {
@@ -266,6 +265,9 @@ window.addEventListener('message', async (event) => {
     window.parent.postMessage({ type:'pdf-ok' }, '*');
   }
 });
+
+// 1. Avisar a Wix "ya estoy listo"
+window.parent.postMessage({ type: 'ready' }, "*");
 
 async function generarPDFyDescargar(data){
   await waitForJsPDF();                           // garantiza carga del UMD
