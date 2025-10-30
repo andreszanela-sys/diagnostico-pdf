@@ -268,20 +268,26 @@ window.addEventListener('message', async (event) => {
 });
 
 async function generarPDFyDescargar(data){
+  await waitForJsPDF();                           // garantiza carga del UMD
+  const JS = window.jspdf && window.jspdf.jsPDF;  // constructor real
+  if (typeof JS !== 'function') {
+    throw new Error('jsPDF no disponible (constructor ausente)');
+  }
 
-    await waitForJsPDF(); // solo espera a que cargue
-   const DocCtor = window.jspdf.jsPDF;     // toma el constructor UMD directo
-   const doc = new DocCtor({ unit: 'pt', format: 'letter' });
+  const doc = new JS({ unit: 'pt', format: 'letter' });
 
-  // sanity check (déjalo por ahora)
-   console.log('jsPDF?', { 
-     hasSetFont: typeof doc.setFont, 
-     hasText: typeof doc.text, 
-    ctor: DocCtor && DocCtor.name 
-  });
-   if (typeof doc.setFont !== 'function') {
-     throw new Error('Instancia jsPDF inválida (setFont ausente)');
-}
+// sanity checks duros
+const ok = (
+  doc &&
+  typeof doc.addPage === 'function' &&
+  typeof doc.text === 'function' &&
+  typeof doc.setFont === 'function'
+);
+console.log('jsPDF sanity:', {
+  isObject: !!doc, addPage: typeof doc.addPage, text: typeof doc.text, setFont: typeof doc.setFont
+});
+if (!ok) throw new Error('Instancia inválida de jsPDF: faltan métodos base');
+
   /*const jspdfNS = await waitForJsPDF(); 
   const { jsPDF } = jspdfNS; 
     //const jsPDF = await waitForJsPDF();
